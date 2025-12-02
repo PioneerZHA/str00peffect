@@ -40,8 +40,14 @@ export function useMultiplayer() {
   const [connectionError, setConnectionError] = useState<string>("")
 
   const channelRef = useRef<RealtimeChannel | null>(null)
-  const supabaseRef = useRef(createClient())
+  const supabaseRef = useRef<ReturnType<typeof createClient>>(null)
   const myIdRef = useRef<string>(Math.random().toString(36).substring(2, 10))
+
+  useEffect(() => {
+    if (!supabaseRef.current) {
+      supabaseRef.current = createClient()
+    }
+  }, [])
 
   // 处理接收到的消息
   const handleMessage = useCallback((payload: { type: string; event: string; payload: MultiplayerMessage }) => {
@@ -135,12 +141,17 @@ export function useMultiplayer() {
   }, [])
 
   const createRoom = useCallback(() => {
+    const supabase = supabaseRef.current
+    if (!supabase) {
+      setConnectionError("连接服务未就绪，请稍后重试")
+      return ""
+    }
+
     const id = Math.random().toString(36).substring(2, 8).toUpperCase()
     setRoomId(id)
     setIsHost(true)
     setConnectionError("")
 
-    const supabase = supabaseRef.current
     const channel = supabase.channel(`stroop-game-${id}`, {
       config: {
         broadcast: {
@@ -163,11 +174,16 @@ export function useMultiplayer() {
 
   const joinRoom = useCallback(
     (id: string) => {
+      const supabase = supabaseRef.current
+      if (!supabase) {
+        setConnectionError("连接服务未就绪，请稍后重试")
+        return false
+      }
+
       setRoomId(id)
       setIsHost(false)
       setConnectionError("")
 
-      const supabase = supabaseRef.current
       const channel = supabase.channel(`stroop-game-${id}`, {
         config: {
           broadcast: {
@@ -347,7 +363,7 @@ export function useMultiplayer() {
   }, [gameData])
 
   const cleanup = useCallback(() => {
-    if (channelRef.current) {
+    if (channelRef.current && supabaseRef.current) {
       supabaseRef.current.removeChannel(channelRef.current)
       channelRef.current = null
     }
